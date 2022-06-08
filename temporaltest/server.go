@@ -27,6 +27,8 @@ type TestServer struct {
 	clients              []client.Client
 	workers              []worker.Worker
 	t                    *testing.T
+	defaultClientOptions client.Options
+	serverOptions        []temporalite.ServerOption
 }
 
 func (ts *TestServer) fatal(err error) {
@@ -56,7 +58,7 @@ func (ts *TestServer) Worker(taskQueue string, registerFunc func(registry worker
 // be closed on TestServer.Stop.
 func (ts *TestServer) Client() client.Client {
 	if ts.defaultClient == nil {
-		ts.defaultClient = ts.NewClientWithOptions(client.Options{})
+		ts.defaultClient = ts.NewClientWithOptions(ts.defaultClientOptions)
 	}
 	return ts.defaultClient
 }
@@ -120,11 +122,12 @@ func NewServer(opts ...TestServerOption) *TestServer {
 	}
 
 	s, err := temporalite.NewServer(
-		temporalite.WithNamespaces(ts.defaultTestNamespace),
-		temporalite.WithPersistenceDisabled(),
-		temporalite.WithDynamicPorts(),
-		temporalite.WithLogger(log.NewNoopLogger()),
+		append([]temporalite.ServerOption{temporalite.WithNamespaces(ts.defaultTestNamespace),
+			temporalite.WithPersistenceDisabled(),
+			temporalite.WithDynamicPorts(),
+			temporalite.WithLogger(log.NewNoopLogger())}, ts.serverOptions...)...,
 	)
+
 	if err != nil {
 		ts.fatal(fmt.Errorf("error creating server: %w", err))
 	}
@@ -138,3 +141,8 @@ func NewServer(opts ...TestServerOption) *TestServer {
 
 	return &ts
 }
+
+// NewServerWithTls starts and returns a new TestServer.
+//
+// If not specifying the WithT option, the caller should execute Stop when finished to close
+// the server and release resources.
